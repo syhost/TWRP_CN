@@ -390,8 +390,7 @@ int GUIFileSelector::Render(void)
 				rect_y = currentIconHeight;
 			gr_blit(icon->GetResource(), 0, 0, currentIconWidth, rect_y, mRenderX + currentIconOffsetX, image_y);
 		}
-//		gr_textExWH(mRenderX + mIconWidth + 5, yPos + fontOffsetY, label.c_str(), fontResource, mRenderX + mRenderW, mRenderY + mRenderH);
-		gr_textExWH(mRenderX + mIconWidth + 5, yPos + fontOffsetY, label.c_str(), NULL, mRenderX + mRenderW, mRenderY + mRenderH);
+		gr_textExWH(mRenderX + mIconWidth + 5, yPos + fontOffsetY, label.c_str(), fontResource, mRenderX + mRenderW, mRenderY + mRenderH);
 
 		// Add the separator
 		if (yPos + actualLineHeight < mRenderH + mRenderY) {
@@ -424,8 +423,7 @@ int GUIFileSelector::Render(void)
 
 		// render the text
 		gr_color(mHeaderFontColor.red, mHeaderFontColor.green, mHeaderFontColor.blue, 255);
-//		gr_textExWH(mRenderX + mIconOffsetX + 5, yPos + (int)((mHeaderH - mFontHeight) / 2), mLastValue.c_str(), fontResource, mRenderX + mRenderW, mRenderY + mRenderH);
-		gr_textExWH(mRenderX + mIconOffsetX + 5, yPos + (int)((mHeaderH - mFontHeight) / 2), mLastValue.c_str(), NULL, mRenderX + mRenderW, mRenderY + mRenderH);
+		gr_textExWH(mRenderX + mIconOffsetX + 5, yPos + (int)((mHeaderH - mFontHeight) / 2), mLastValue.c_str(), fontResource, mRenderX + mRenderW, mRenderY + mRenderH);
 
 		// Add the separator
 		gr_color(mHeaderSeparatorColor.red, mHeaderSeparatorColor.green, mHeaderSeparatorColor.blue, 255);

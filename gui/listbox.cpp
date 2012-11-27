@@ -192,7 +192,7 @@ int GUIListBox::Render(void)
     void* fontResource = NULL;
     if (mFont)  fontResource = mFont->GetResource();
 
-    int yPos = mRenderY + (mLineSpacing / 2) + 25;
+    int yPos = mRenderY + (mLineSpacing / 2);
     for (line = 0; line < lines; line++)
     {
         Resource* icon;
@@ -212,8 +212,7 @@ int GUIListBox::Render(void)
         {
             gr_blit(icon->GetResource(), 0, 0, mIconWidth, mIconHeight, mRenderX, (yPos + (int)((mLineHeight - mIconHeight) / 2)));
         }
-//        gr_textExW(mRenderX + mIconWidth + 5, yPos, label.c_str(), fontResource, mRenderX + mRenderW - mIconWidth - 5);
-        gr_textExW(mRenderX + mIconWidth + 5, yPos, label.c_str(), NULL, mRenderX + mRenderW - mIconWidth - 5);
+        gr_textExW(mRenderX + mIconWidth + 5, yPos, label.c_str(), fontResource, mRenderX + mRenderW - mIconWidth - 5);
 
         // Move the yPos
         yPos += mLineHeight + mLineSpacing;
