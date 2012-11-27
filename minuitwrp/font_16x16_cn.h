@@ -25,16 +25,16 @@ struct typFONT16
 } ;
 
 struct {
-//  unsigned char_en_num;
-//  unsigned char_cn_num;
+  unsigned en_num;
+  unsigned cn_num;
   CHAR_LEN_TYPE ewidth;
   CHAR_LEN_TYPE eheight;
   CHAR_LEN_TYPE cwidth;
   CHAR_LEN_TYPE cheight;
   struct typFONT16 fontdata;
 } font_cn = {
-//  .char_en_num 	= CHAR_EN_NUM,
-//  .char_cn_num 	= CHAR_CN_NUM,
+  .en_num 	= CHAR_EN_NUM,
+  .cn_num 	= CHAR_CN_NUM,
   .ewidth 		= WIDTH_EN16,
   .eheight 		= HEIGHT_EN16,
   .cwidth 		= WIDTH_CN16,

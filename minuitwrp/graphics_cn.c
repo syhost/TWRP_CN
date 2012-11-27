@@ -60,7 +60,7 @@
 #define PRINT_SCREENINFO 1 // Enables printing of screen info to log
 
 typedef struct {
-	unsigned fontver;
+//	unsigned fontver;
     GGLSurface texture;
     unsigned offset[97];
     unsigned cheight;
@@ -71,13 +71,15 @@ typedef struct {
 	unsigned fontver;
     GGLSurface texture;
     unsigned ascent;
-//	unsigned char_en_num;
-//	unsigned char_cn_num;    
+	unsigned en_num;
+	unsigned cn_num;
     CHAR_LEN_TYPE ewidth;
     CHAR_LEN_TYPE eheight;
     CHAR_LEN_TYPE cwidth;
     CHAR_LEN_TYPE cheight;
     unsigned char *fontdata;
+    unsigned char *fontindex_en;
+    unsigned short *fontindex_cn;
 } GRFontCN;
 
 static GRFont *gr_font = 0;
@@ -351,15 +353,38 @@ unsigned character_width(const char *s, void* pFont)
 	return font->cwidth;
 }
 
-int getUNICharID(unsigned short unicode)
+int getGBCharID(unsigned c1, unsigned c2)
 {
-	int i;
-	for (i = 0; i < UNICODE_NUM; i++) 
+	if (c1 >= 0xB0 && c1 <=0xF7 && c2>=0xA1 && c2<=0xFE)	
 	{
-		if (unicode == unicodemap[i])
-		return i;
+		return (c1-0xB0)*94+c2-0xA1;
 	}
 	return -1;
+}
+
+int getUNICharID(unsigned short unicode, void* pFont)
+{
+	int i;
+	GRFontCN *font = (GRFontCN *)pFont;
+	
+	for (i = 0; i < font->cn_num; i++) 
+	{
+		if (unicode == font->fontindex_cn[i])
+		return i;
+	}
+
+	return -1;
+}
+
+int utf8_to_unicode(unsigned c1, unsigned c2, unsigned c3)
+{
+	unsigned short unicode;
+	
+	unicode = (c1 & 0x1F) << 12;
+	unicode |= (c2 & 0x3F) << 6;
+	unicode |= (c3 & 0x3F);
+	
+	return unicode;
 }
 
 static void get_char_en(unsigned int id, void* pFont)
@@ -479,10 +504,8 @@ int gr_textEx(int x, int y, const char *s, void* pFont)
 			{
 				off2 = *s++;
 				off3 = *s++;
-				unicode = (off & 0x1F) << 12;
-				unicode |= (off2 & 0x3F) << 6;
-				unicode |= (off3 & 0x3F);
-				id = getUNICharID(unicode);
+				unicode = utf8_to_unicode(off, off2, off3);
+				id = getUNICharID(unicode, font);
 					
 				if (id >= 0) 
 				{
@@ -554,10 +577,8 @@ int gr_textExW(int x, int y, const char *s, void* pFont, int max_width)
 			{
 				off2 = *s++;
 				off3 = *s++;
-				unicode = (off & 0x1F) << 12;
-				unicode |= (off2 & 0x3F) << 6;
-				unicode |= (off3 & 0x3F);
-				id = getUNICharID(unicode);
+				unicode = utf8_to_unicode(off, off2, off3);
+				id = getUNICharID(unicode, font);
 
 				if (id >= 0) 
 				{
@@ -644,10 +665,8 @@ int gr_textExWH(int x, int y, const char *s, void* pFont, int max_width, int max
 			{
 				off2 = *s++;
 				off3 = *s++;
-				unicode = (off & 0x1F) << 12;
-				unicode |= (off2 & 0x3F) << 6;
-				unicode |= (off3 & 0x3F);
-				id = getUNICharID(unicode);
+				unicode = utf8_to_unicode(off, off2, off3);
+				id = getUNICharID(unicode, font);
 				
 				if (id >= 0) 
 				{
@@ -676,7 +695,6 @@ int gr_textExWH(int x, int y, const char *s, void* pFont, int max_width, int max
 
     return x;
 }
-
 
 int twgr_text(int x, int y, const char *s)
 {
@@ -718,10 +736,8 @@ int twgr_text(int x, int y, const char *s)
 			{
 				off2 = *s++;
 				off3 = *s++;
-				unicode = ((off & 0x1F) << 12);
-				unicode |= ((off2 & 0x3F) << 6);
-				unicode |= (off3 & 0x3F);
-				id = getUNICharID(unicode);
+				unicode = utf8_to_unicode(off, off2, off3);
+				id = getUNICharID(unicode, font);
 
 				if (id >= 0)
 				{
@@ -838,6 +854,11 @@ void* gr_loadFont(const char* fontName)
     unsigned char *in, data;
     CHAR_LEN_TYPE ewidth, eheight, cwidth, cheight;
     unsigned bits_len_cn, bits_len_en, total_len;
+    unsigned en_num = 0, cn_num = 0, index_type = 0;
+    unsigned char *fontindex_en = NULL;
+    unsigned short *fontindex_cn = NULL;
+    unsigned fontindex_tmp;
+    unsigned i;
 
     fd = open(fontName, O_RDONLY);
     if (fd == -1)
@@ -853,18 +874,85 @@ void* gr_loadFont(const char* fontName)
     font = calloc(sizeof(*font), 1);
     ftex = &font->texture;
 
-    read(fd, &ewidth, sizeof(CHAR_LEN_TYPE));
-    read(fd, &eheight, sizeof(CHAR_LEN_TYPE));
-    read(fd, &cwidth, sizeof(CHAR_LEN_TYPE));
-    read(fd, &cheight, sizeof(CHAR_LEN_TYPE));
+    read(fd, &en_num, sizeof(unsigned));
+    if(en_num > 0xFF)
+    {
+		font->fontver = FONT_VER_NO_INDEX;
+		
+		ewidth  = en_num & 0xFF;
+		eheight = (en_num>>8) & 0xFF;
+		cwidth  = (en_num>>16) & 0xFF;
+		cheight = (en_num>>24) & 0xFF;
+	}
+	else
+	{
+		font->fontver = FONT_VER_HAVE_INDEX;
+		
+		read(fd, &cn_num, sizeof(unsigned));
+		read(fd, &index_type, sizeof(unsigned));
+		read(fd, &ewidth, sizeof(CHAR_LEN_TYPE));
+		read(fd, &eheight, sizeof(CHAR_LEN_TYPE));
+		read(fd, &cwidth, sizeof(CHAR_LEN_TYPE));
+		read(fd, &cheight, sizeof(CHAR_LEN_TYPE));
+	}
 
 	bits_len_en = ((ewidth+7) & 0xF8) * eheight;
 	bits_len_cn = ((cwidth+7) & 0xF8) * cheight;
     bits = malloc(bits_len_cn);
     memset(bits, 0, bits_len_cn);
-    total_len = (CHAR_EN_NUM*bits_len_en + CHAR_CN_NUM*bits_len_cn)/8;
+    total_len = (en_num*bits_len_en + cn_num*bits_len_cn)/8;
     fontdata = malloc(total_len);
     read(fd, fontdata, total_len);
+    
+    if(font->fontver == FONT_VER_HAVE_INDEX)
+    {
+		if(en_num == CHAR_EN_NUM)
+		{
+			fontindex_en = NULL;
+		}
+		else
+		{
+			fontindex_en = malloc(en_num);
+			read(fd, fontindex_en, en_num);
+		}
+		
+		if(cn_num == CHAR_CN_NUM)
+		{
+			fontindex_cn = unicodemap;
+			index_type == FONT_INDEX_TYPE_UTF8;
+		}
+		else
+		{
+			fontindex_cn = (unsigned short*)malloc(cn_num*2);
+			
+			if(index_type == FONT_INDEX_TYPE_UTF8)
+			{
+				for(i=0; i<cn_num; i++)
+				{
+					read(fd, fontindex_tmp, 3);
+					fontindex_cn[i] = utf8_to_unicode(fontindex_tmp&0xFF, (fontindex_tmp>>8)&0xFF, (fontindex_tmp>>16)&0xFF);
+					
+				}
+			}
+			else if(index_type == FONT_INDEX_TYPE_GBK)
+			{
+				for(i=0; i<cn_num; i++)
+				{
+					read(fd, fontindex_tmp, 2);
+					fontindex_cn[i] = unicodemap[getGBCharID(fontindex_tmp&0xFF, (fontindex_tmp>>8)&0xFF)];
+				}
+			}			
+		}
+	}
+	else
+	{
+		index_type == FONT_INDEX_TYPE_UTF8;
+		en_num = CHAR_EN_NUM;
+		cn_num = CHAR_CN_NUM;
+		fontindex_en = NULL;
+		fontindex_cn = unicodemap;
+	}	
+	
     close(fd);
 
     ftex->version = sizeof(*ftex);
@@ -875,17 +963,24 @@ void* gr_loadFont(const char* fontName)
     ftex->format = GGL_PIXEL_FORMAT_A_8;
     
     font->ascent = cheight/4 - cheight/8;
+    font->en_num = en_num;
+    font->cn_num = cn_num;
     font->ewidth = ewidth;
     font->eheight = eheight;
     font->cwidth = cwidth;
     font->cheight = cheight;
     font->fontdata = fontdata;
+    font->fontindex_en = fontindex_en;
+    font->fontindex_cn = fontindex_cn;
 	
     LOGI("font = %s\n", fontName);
-    LOGI("font->ewidth  = %d\n", font->ewidth);
-    LOGI("font->eheight = %d\n", font->eheight);
-    LOGI("font->cwidth  = %d\n", font->cwidth);
-    LOGI("font->cheight = %d\n", font->cheight);
+    LOGI("font->en_num      = %d\n", font->en_num);
+    LOGI("font->cn_num      = %d\n", font->cn_num);
+    LOGI("font->index_type  = %d\n", index_type);
+    LOGI("font->ewidth      = %d\n", font->ewidth);
+    LOGI("font->eheight     = %d\n", font->eheight);
+    LOGI("font->cwidth      = %d\n", font->cwidth);
+    LOGI("font->cheight     = %d\n", font->cheight);
       
     return (void*) font;
 }
@@ -893,8 +988,7 @@ void* gr_loadFont(const char* fontName)
 int gr_getFontDetails(void* font, unsigned* cheight, unsigned* maxwidth)
 {
     GRFontCN *fnt = (GRFontCN *) font;
-
-
+    
     if (!fnt)   
 		fnt = gr_font_cn2;
 
@@ -977,11 +1071,15 @@ static void gr_init_font_cn(void)
     ftex->format = GGL_PIXEL_FORMAT_A_8;
     
     gr_font_cn->ascent = font_cn.cheight/4 - font_cn.cheight/8;
+    gr_font_cn->en_num = CHAR_EN_NUM;
+    gr_font_cn->cn_num = CHAR_CN_NUM;
     gr_font_cn->ewidth = font_cn.ewidth;
     gr_font_cn->eheight = font_cn.eheight;
     gr_font_cn->cwidth = font_cn.cwidth;
     gr_font_cn->cheight = font_cn.cheight;
     gr_font_cn->fontdata = (unsigned char*)&font_cn.fontdata;
+    gr_font_cn->fontindex_en = NULL;
+    gr_font_cn->fontindex_cn = unicodemap;
 }
 
 static void gr_init_font_cn2(void)
@@ -1004,11 +1102,15 @@ static void gr_init_font_cn2(void)
     ftex->format = GGL_PIXEL_FORMAT_A_8;
     
     gr_font_cn2->ascent = font_cn2.cheight/4 - font_cn2.cheight/8;
+    gr_font_cn2->en_num = CHAR_EN_NUM;
+    gr_font_cn2->cn_num = CHAR_CN_NUM;    
     gr_font_cn2->ewidth = font_cn2.ewidth;
     gr_font_cn2->eheight = font_cn2.eheight;
     gr_font_cn2->cwidth = font_cn2.cwidth;
     gr_font_cn2->cheight = font_cn2.cheight;
     gr_font_cn2->fontdata = (unsigned char*)&font_cn2.fontdata;
+    gr_font_cn2->fontindex_en = NULL;
+    gr_font_cn2->fontindex_cn = unicodemap;
 }
 
 int gr_init(void)
