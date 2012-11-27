@@ -883,6 +883,9 @@ void* gr_loadFont(const char* fontName)
 		eheight = (en_num>>8) & 0xFF;
 		cwidth  = (en_num>>16) & 0xFF;
 		cheight = (en_num>>24) & 0xFF;
+		
+		en_num = CHAR_EN_NUM;
+		cn_num = CHAR_CN_NUM;
 	}
 	else
 	{
@@ -947,8 +950,6 @@ void* gr_loadFont(const char* fontName)
 	else
 	{
 		index_type == FONT_INDEX_TYPE_UTF8;
-		en_num = CHAR_EN_NUM;
-		cn_num = CHAR_CN_NUM;
 		fontindex_en = NULL;
 		fontindex_cn = unicodemap;
 	}	
