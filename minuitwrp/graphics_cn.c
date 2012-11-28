@@ -858,6 +858,7 @@ void* gr_loadFont(const char* fontName)
     unsigned char *fontindex_en = NULL;
     unsigned short *fontindex_cn = NULL;
     unsigned fontindex_tmp;
+    int unicode;
     unsigned i;
 
     fd = open(fontName, O_RDONLY);
@@ -932,8 +933,12 @@ void* gr_loadFont(const char* fontName)
 			{
 				for(i=0; i<cn_num; i++)
 				{
-					read(fd, fontindex_tmp, 3);
-					fontindex_cn[i] = utf8_to_unicode(fontindex_tmp&0xFF, (fontindex_tmp>>8)&0xFF, (fontindex_tmp>>16)&0xFF);
+					read(fd, &fontindex_tmp, 3);
+					unicode = utf8_to_unicode(fontindex_tmp&0xFF, (fontindex_tmp>>8)&0xFF, (fontindex_tmp>>16)&0xFF);
+					if(unicode >= 0)
+						fontindex_cn[i] = unicode;
+					else
+						fontindex_cn[i] = unicodemap[0];
 					
 				}
 			}
@@ -941,8 +946,12 @@ void* gr_loadFont(const char* fontName)
 			{
 				for(i=0; i<cn_num; i++)
 				{
-					read(fd, fontindex_tmp, 2);
-					fontindex_cn[i] = unicodemap[getGBCharID(fontindex_tmp&0xFF, (fontindex_tmp>>8)&0xFF)];
+					read(fd, &fontindex_tmp, 2);
+					unicode = getGBCharID(fontindex_tmp&0xFF, (fontindex_tmp>>8)&0xFF);
+					if(unicode >= 0)
+						fontindex_cn[i] = unicodemap[unicode];
+					else
+						fontindex_cn[i] = unicodemap[0];
 				}
 			}			
 		}
@@ -977,7 +986,7 @@ void* gr_loadFont(const char* fontName)
     LOGI("font = %s\n", fontName);
     LOGI("font->en_num      = %d\n", font->en_num);
     LOGI("font->cn_num      = %d\n", font->cn_num);
-    LOGI("font->index_type  = %d\n", index_type);
+    LOGI("font->index_type  = %s\n", index_type?"UTF-8":"GBK");
     LOGI("font->ewidth      = %d\n", font->ewidth);
     LOGI("font->eheight     = %d\n", font->eheight);
     LOGI("font->cwidth      = %d\n", font->cwidth);
