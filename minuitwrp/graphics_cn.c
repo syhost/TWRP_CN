@@ -60,7 +60,7 @@
 #define PRINT_SCREENINFO 1 // Enables printing of screen info to log
 
 typedef struct {
-//	unsigned fontver;
+	unsigned fontver;
     GGLSurface texture;
     unsigned offset[97];
     unsigned cheight;
@@ -80,6 +80,8 @@ typedef struct {
     unsigned char *fontdata;
     unsigned char *fontindex_en;
     unsigned short *fontindex_cn;
+    unsigned char *width_offset_en;
+    unsigned char *width_offset_cn;
 } GRFontCN;
 
 static GRFont *gr_font = 0;
@@ -313,23 +315,304 @@ void gr_color(unsigned char r, unsigned char g, unsigned char b, unsigned char a
     gl->color4xv(gl, color);
 }
 
-int gr_measureEx(const char *s, void* font)
+//====================================== OFFICIAL FONT EN ========================================================================//
+int gr_measureEx_en(const char *s, void* pFont)
 {
-    GRFontCN * fnt = (GRFontCN*) font;
+    GRFont* font = (GRFont*)pFont;
     int total = 0;
     unsigned pos;
     unsigned off;
 
-    if (!fnt)   
-		fnt = gr_font_cn2;
+    if (!font)   
+		font = gr_font;
+
+    while ((off = *s++))
+    {
+        off -= 32;
+        if (off < 96)
+            total += (font->offset[off+1] - font->offset[off]);
+    }
+    return total;
+}
+
+unsigned character_width_en(const char *s, void* pFont)
+{
+	GRFont *font = (GRFont*) pFont;
+	unsigned off;
+
+	/* Handle default font */
+    if (!font)  
+		font = gr_font;
+
+	off = *s - 32;
+	if (off == 0)
+		return 0;
+
+	return font->offset[off+1] - font->offset[off];
+}
+
+int gr_textEx_en(int x, int y, const char *s, void* pFont)
+{
+    GGLContext *gl = gr_context;
+    GRFont *font = (GRFont*)pFont;
+    unsigned off;
+    unsigned cwidth;
+
+    /* Handle default font */
+    if (!font)  
+		font = gr_font;
+
+    gl->bindTexture(gl, &font->texture);
+    gl->texEnvi(gl, GGL_TEXTURE_ENV, GGL_TEXTURE_ENV_MODE, GGL_REPLACE);
+    gl->texGeni(gl, GGL_S, GGL_TEXTURE_GEN_MODE, GGL_ONE_TO_ONE);
+    gl->texGeni(gl, GGL_T, GGL_TEXTURE_GEN_MODE, GGL_ONE_TO_ONE);
+    gl->enable(gl, GGL_TEXTURE_2D);
+
+    while((off = *s++)) 
+    {
+        off -= 32;
+        cwidth = 0;
+        if (off < 96) 
+        {
+            cwidth = font->offset[off+1] - font->offset[off];
+			gl->texCoord2i(gl, (font->offset[off]) - x, 0 - y);
+			gl->recti(gl, x, y, x + cwidth, y + font->cheight);
+			x += cwidth;
+        }
+    }
+
+    return x;
+}
+
+int gr_textExW_en(int x, int y, const char *s, void* pFont, int max_width)
+{
+    GGLContext *gl = gr_context;
+    GRFont *font = (GRFont*)pFont;
+    unsigned off;
+    unsigned cwidth;
+
+    /* Handle default font */
+    if (!font)  
+		font = gr_font;
+
+    gl->bindTexture(gl, &font->texture);
+    gl->texEnvi(gl, GGL_TEXTURE_ENV, GGL_TEXTURE_ENV_MODE, GGL_REPLACE);
+    gl->texGeni(gl, GGL_S, GGL_TEXTURE_GEN_MODE, GGL_ONE_TO_ONE);
+    gl->texGeni(gl, GGL_T, GGL_TEXTURE_GEN_MODE, GGL_ONE_TO_ONE);
+    gl->enable(gl, GGL_TEXTURE_2D);
+
+    while((off = *s++)) 
+    {
+        off -= 32;
+        cwidth = 0;
+        if (off < 96) 
+        {
+            cwidth = font->offset[off+1] - font->offset[off];
+			if ((x + (int)cwidth) < max_width) {
+				gl->texCoord2i(gl, (font->offset[off]) - x, 0 - y);
+				gl->recti(gl, x, y, x + cwidth, y + font->cheight);
+				x += cwidth;
+			} 
+			else 
+			{
+				gl->texCoord2i(gl, (font->offset[off]) - x, 0 - y);
+				gl->recti(gl, x, y, max_width, y + font->cheight);
+				x = max_width;
+				return x;
+			}
+        }
+    }
+
+    return x;
+}
+
+int gr_textExWH_en(int x, int y, const char *s, void* pFont, int max_width, int max_height)
+{
+    GGLContext *gl = gr_context;
+    GRFont *font = (GRFont*)pFont;
+    unsigned off;
+    unsigned cwidth;
+	int rect_x, rect_y;
+
+    /* Handle default font */
+    if (!font)  
+		font = gr_font;
+
+    gl->bindTexture(gl, &font->texture);
+    gl->texEnvi(gl, GGL_TEXTURE_ENV, GGL_TEXTURE_ENV_MODE, GGL_REPLACE);
+    gl->texGeni(gl, GGL_S, GGL_TEXTURE_GEN_MODE, GGL_ONE_TO_ONE);
+    gl->texGeni(gl, GGL_T, GGL_TEXTURE_GEN_MODE, GGL_ONE_TO_ONE);
+    gl->enable(gl, GGL_TEXTURE_2D);
+
+    while((off = *s++)) 
+    {
+        off -= 32;
+        cwidth = 0;
+        if (off < 96) 
+        {
+            cwidth = font->offset[off+1] - font->offset[off];
+			if ((x + (int)cwidth) < max_width)
+				rect_x = x + cwidth;
+			else
+				rect_x = max_width;
+			if (y + font->cheight < (unsigned int)(max_height))
+				rect_y = y + font->cheight;
+			else
+				rect_y = max_height;
+
+			gl->texCoord2i(gl, (font->offset[off]) - x, 0 - y);
+			gl->recti(gl, x, y, rect_x, rect_y);
+			x += cwidth;
+			if (x > max_width)
+				return x;
+        }
+    }
+
+    return x;
+}
+
+int twgr_text_en(int x, int y, const char *s)
+{
+    GGLContext *gl = gr_context;
+    GRFont *font = gr_font;
+    unsigned off;
+    unsigned cwidth = 0;
+
+    y -= font->ascent;
+
+    gl->bindTexture(gl, &font->texture);
+    gl->texEnvi(gl, GGL_TEXTURE_ENV, GGL_TEXTURE_ENV_MODE, GGL_REPLACE);
+    gl->texGeni(gl, GGL_S, GGL_TEXTURE_GEN_MODE, GGL_ONE_TO_ONE);
+    gl->texGeni(gl, GGL_T, GGL_TEXTURE_GEN_MODE, GGL_ONE_TO_ONE);
+    gl->enable(gl, GGL_TEXTURE_2D);
+
+    while((off = *s++)) 
+    {
+        off -= 32;
+        if (off < 96) 
+        {
+            cwidth = font->offset[off+1] - font->offset[off];
+            gl->texCoord2i(gl, (off * cwidth) - x, 0 - y);
+            gl->recti(gl, x, y, x + cwidth, y + font->cheight);
+        }
+        x += cwidth;
+    }
+
+    return x;
+}
+
+int gr_getFontDetails_en(void* pFont, unsigned* cheight, unsigned* maxwidth)
+{
+    GRFont *font = (GRFont*) pFont;
+
+    if (!font)   
+		font = gr_font;
+    if (!font)   
+		return -1;
+
+    if (cheight)    
+		*cheight = font->cheight;
+    if (maxwidth)
+    {
+        int pos;
+        *maxwidth = 0;
+        for (pos = 0; pos < 96; pos++)
+        {
+            unsigned int width = font->offset[pos+1] - font->offset[pos];
+            if (width > *maxwidth)
+            {
+                *maxwidth = width;
+            }
+        }
+    }
+    return 0;
+}
+
+void* gr_loadFont_en(const char* fontName)
+{
+    int fd;
+    GRFont *font = 0;
+    GGLSurface *ftex;
+    unsigned char *bits, *rle;
+    unsigned char *in, data;
+    unsigned width, height;
+    unsigned element;
+
+    fd = open(fontName, O_RDONLY);
+    if (fd == -1)
+    {
+        char tmp[128];
+
+        sprintf(tmp, "/res/fonts/%s.dat", fontName);
+        fd = open(tmp, O_RDONLY);
+        if (fd == -1)
+            return NULL;
+    }
+
+    font = calloc(sizeof(*font), 1);
+    ftex = &font->texture;
+
+    read(fd, &width, sizeof(unsigned));
+    read(fd, &height, sizeof(unsigned));
+    read(fd, font->offset, sizeof(unsigned) * 96);
+    font->offset[96] = width;
+
+    bits = malloc(width * height);
+    memset(bits, 0, width * height);
+
+    unsigned pos = 0;
+    while (pos < width * height)
+    {
+        int bit;
+
+        read(fd, &data, 1);
+        for (bit = 0; bit < 8; bit++)
+        {
+            if (data & (1 << (7-bit)))  bits[pos++] = 255;
+            else                        bits[pos++] = 0;
+
+            if (pos == width * height)  break;
+        }
+    }
+    close(fd);
+
+    ftex->version = sizeof(*ftex);
+    ftex->width = width;
+    ftex->height = height;
+    ftex->stride = width;
+    ftex->data = (void*) bits;
+    ftex->format = GGL_PIXEL_FORMAT_A_8;
+    font->cheight = height;
+    font->ascent = height - 2;
+    return (void*) font;
+}
+//===========================================================================================================================//
+
+int gr_measureEx(const char *s, void* pFont)
+{
+	if(pFont != NULL)
+	{
+		if(*(char*)pFont == FONT_VER_OFFICIAL)
+		{
+			return gr_measureEx_en(s, pFont);
+		}
+	}
+	
+    GRFontCN * font = (GRFontCN*)pFont;
+    int total = 0;
+    unsigned pos;
+    unsigned off;
+
+    if (!font)   
+		font = gr_font_cn2;
 
     while ((off = *s++))
     {
         if(off < 0x80)
-			total += fnt->ewidth;
+			total += font->ewidth;
 		else
 		{
-			total += fnt->cwidth;
+			total += font->cwidth;
 			s+=2;
 		}
     }
@@ -339,6 +622,14 @@ int gr_measureEx(const char *s, void* font)
 
 unsigned character_width(const char *s, void* pFont)
 {
+	if(pFont != NULL)
+	{
+		if(*(char*)pFont == FONT_VER_OFFICIAL)
+		{
+			return character_width_en(s, pFont);
+		}
+	}
+	
 	GRFontCN *font = (GRFontCN*) pFont;
 	unsigned off;
 
@@ -399,16 +690,19 @@ static void get_char_en(unsigned int id, void* pFont)
 	// Handle default font
     if (!font)  
 		font = gr_font_cn2;
-    
+		
     ftex = &font->texture;
-
-	bits_len = ((font->ewidth+7) & 0xF8) * font->eheight;
-
-    ftex->version = sizeof(*ftex);
-    ftex->width = font->ewidth;
+    ftex->version = sizeof(*ftex);  
+	
+	if((font->fontver & FONT_VER_UNMONO_EN) == FONT_VER_UNMONO_EN)
+		ftex->width = font->width_offset_en[id];
+	else
+		ftex->width = font->ewidth;
     ftex->height = font->eheight;
     ftex->stride = (font->ewidth+7) & 0xF8;
+    
     bits = (unsigned char *)ftex->data;
+    bits_len = ((font->ewidth+7) & 0xF8) * font->eheight;
 
 //    in = font_cn2.fontdata.font_en[id].Mask;
 	in = font->fontdata + id*bits_len/8;
@@ -437,15 +731,17 @@ static void get_char_cn(unsigned int id, void* pFont)
 		font = gr_font_cn2;
     
     ftex = &font->texture;
-
+    ftex->version = sizeof(*ftex);
+    if((font->fontver & FONT_VER_UNMONO_CN) == FONT_VER_UNMONO_CN)
+		ftex->width = font->width_offset_cn[id];
+    else
+		ftex->width = font->cwidth;
+    ftex->height = font->cheight;
+    ftex->stride = (font->cwidth+7) & 0xF8;
+    
+    bits = (unsigned char *)ftex->data;  
 	bits_len_en = ((font->ewidth+7) & 0xF8) * font->eheight;
 	bits_len_cn = ((font->cwidth+7) & 0xF8) * font->cheight;
-
-    ftex->version = sizeof(*ftex);
-    ftex->width = font->cwidth;
-    ftex->height = font->cheight;
-    ftex->stride = (font->cwidth+7) & 0xFFF8;
-    bits = (unsigned char *)ftex->data;
 
 //    in = font_cn2.fontdata.font_cn[id].Mask;
 	in = font->fontdata + CHAR_EN_NUM*bits_len_en/8 + id*bits_len_cn/8;
@@ -462,14 +758,22 @@ static void get_char_cn(unsigned int id, void* pFont)
 
 int gr_textEx(int x, int y, const char *s, void* pFont)
 {
+	if(pFont != NULL)
+	{
+		if(*(char*)pFont == FONT_VER_OFFICIAL)
+		{
+			return gr_textEx_en(x, y, s, pFont);
+		}
+	}
+
     GGLContext *gl = gr_context;
-    GRFontCN *font = (GRFontCN*) pFont;
+    GRFontCN *font = (GRFontCN*)pFont;
     unsigned off;
 	unsigned off2;
 	unsigned off3;
 	int id;
 	unsigned short unicode;
-
+	
 	/* Handle default font */
     if (!font)  
 		font = gr_font_cn2;
@@ -532,8 +836,16 @@ int gr_textEx(int x, int y, const char *s, void* pFont)
 
 int gr_textExW(int x, int y, const char *s, void* pFont, int max_width)
 {
+	if(pFont != NULL)
+	{
+		if(*(char*)pFont == FONT_VER_OFFICIAL)
+		{
+			return gr_textExW_en( x, y, s, pFont, max_width);
+		}
+	}
+	
     GGLContext *gl = gr_context;
-    GRFontCN *font = (GRFont*) pFont;
+    GRFontCN *font = (GRFontCN*)pFont;
     unsigned off;
 	unsigned off2;
 	unsigned off3;
@@ -614,8 +926,16 @@ int gr_textExW(int x, int y, const char *s, void* pFont, int max_width)
 
 int gr_textExWH(int x, int y, const char *s, void* pFont, int max_width, int max_height)
 {
+	if(pFont != NULL)
+	{
+		if(*(char*)pFont == FONT_VER_OFFICIAL)
+		{
+			return gr_textExWH_en( x, y, s, pFont, max_width, max_height);
+		}
+	}
+
     GGLContext *gl = gr_context;
-    GRFontCN *font = (GRFont*) pFont;
+    GRFontCN *font = (GRFontCN*)pFont;
     unsigned off;
 	unsigned off2;
 	unsigned off3;
@@ -765,44 +1085,6 @@ int twgr_text(int x, int y, const char *s)
     return x;
 }
 
-/*
-int twgr_text(int x, int y, const char *s)
-{
-    GGLContext *gl = gr_context;
-    GRFont *font = gr_font;
-    unsigned off;
-    unsigned cwidth = 0;
-
-    y -= font->ascent;
-
-    gl->bindTexture(gl, &font->texture);
-    gl->texEnvi(gl, GGL_TEXTURE_ENV, GGL_TEXTURE_ENV_MODE, GGL_REPLACE);
-    gl->texGeni(gl, GGL_S, GGL_TEXTURE_GEN_MODE, GGL_ONE_TO_ONE);
-    gl->texGeni(gl, GGL_T, GGL_TEXTURE_GEN_MODE, GGL_ONE_TO_ONE);
-    gl->enable(gl, GGL_TEXTURE_2D);
-
-    while((off = *s++)) 
-    {
-        if(off<0x80)
-        {
-			off -= 32;
-			if (off < 96) 
-			{
-				cwidth = font->offset[off+1] - font->offset[off];
-				gl->texCoord2i(gl, (off * cwidth) - x, 0 - y);
-				gl->recti(gl, x, y, x + cwidth, y + font->cheight);
-			}
-			x += cwidth;
-		}
-		else
-		{
-//			x = twgr_text_cn(x, y, s);
-//			s--;
-		}
-	}
-    return x;   
-}
-*/
 void gr_fill(int x, int y, int w, int h)
 {
     GGLContext *gl = gr_context;
@@ -848,10 +1130,10 @@ unsigned int gr_get_height(gr_surface surface)
 void* gr_loadFont(const char* fontName)
 {
     int fd;
-    GRFontCN *font = 0;
+    GRFontCN *font = 0;   
+	GRFont *font_en = 0;
     GGLSurface *ftex;
     unsigned char *bits, *fontdata;
-    unsigned char *in, data;
     CHAR_LEN_TYPE ewidth, eheight, cwidth, cheight;
     unsigned bits_len_cn, bits_len_en, total_len;
     unsigned en_num = 0, cn_num = 0, index_type = 0;
@@ -860,44 +1142,56 @@ void* gr_loadFont(const char* fontName)
     unsigned fontindex_tmp;
     int unicode;
     unsigned i;
+    unsigned char *width_offset_en, *width_offset_cn;
 
     fd = open(fontName, O_RDONLY);
     if (fd == -1)
     {
-        char tmp[128];
+        char tmp[256];
 
         sprintf(tmp, "/res/fonts/%s.dat", fontName);
         fd = open(tmp, O_RDONLY);
         if (fd == -1)
             return NULL;
     }
-
-    font = calloc(sizeof(*font), 1);
-    ftex = &font->texture;
-
+	
+	font = calloc(sizeof(*font), 1);
+	ftex = &font->texture;
+		
     read(fd, &en_num, sizeof(unsigned));
-    if(en_num > 0xFF)
-    {
-		font->fontver = FONT_VER_NO_INDEX;
+    if((en_num > 0xFF) && (en_num < 0xFFFF))
+    {	
+		close(fd);
+		font_en = (GRFont *)gr_loadFont_en(fontName);
+		font_en->fontver = FONT_VER_OFFICIAL;
 		
-		ewidth  = en_num & 0xFF;
-		eheight = (en_num>>8) & 0xFF;
-		cwidth  = (en_num>>16) & 0xFF;
-		cheight = (en_num>>24) & 0xFF;
-		
-		en_num = CHAR_EN_NUM;
-		cn_num = CHAR_CN_NUM;
+		return (void*) font_en;		
 	}
-	else
-	{
-		font->fontver = FONT_VER_HAVE_INDEX;
-		
-		read(fd, &cn_num, sizeof(unsigned));
-		read(fd, &index_type, sizeof(unsigned));
-		read(fd, &ewidth, sizeof(CHAR_LEN_TYPE));
-		read(fd, &eheight, sizeof(CHAR_LEN_TYPE));
-		read(fd, &cwidth, sizeof(CHAR_LEN_TYPE));
-		read(fd, &cheight, sizeof(CHAR_LEN_TYPE));
+    else 
+    {	
+		if(en_num > 0xFFFF)
+		{
+			font->fontver = FONT_VER_NO_INDEX;
+			
+			ewidth  = en_num & 0xFF;
+			eheight = (en_num>>8) & 0xFF;
+			cwidth  = (en_num>>16) & 0xFF;
+			cheight = (en_num>>24) & 0xFF;
+			
+			en_num = CHAR_EN_NUM;
+			cn_num = CHAR_CN_NUM;
+		}
+		else if(en_num < 0xFF)
+		{			
+			read(fd, &cn_num, sizeof(unsigned));
+			read(fd, &index_type, sizeof(unsigned));
+			read(fd, &ewidth, sizeof(CHAR_LEN_TYPE));
+			read(fd, &eheight, sizeof(CHAR_LEN_TYPE));
+			read(fd, &cwidth, sizeof(CHAR_LEN_TYPE));
+			read(fd, &cheight, sizeof(CHAR_LEN_TYPE));
+			
+			font->fontver = index_type | FONT_VER_HAVE_INDEX;
+		}
 	}
 
 	bits_len_en = ((ewidth+7) & 0xF8) * eheight;
@@ -908,7 +1202,7 @@ void* gr_loadFont(const char* fontName)
     fontdata = malloc(total_len);
     read(fd, fontdata, total_len);
     
-    if(font->fontver == FONT_VER_HAVE_INDEX)
+    if(font->fontver & FONT_VER_HAVE_INDEX)
     {
 		if(en_num == CHAR_EN_NUM)
 		{
@@ -923,13 +1217,13 @@ void* gr_loadFont(const char* fontName)
 		if(cn_num == CHAR_CN_NUM)
 		{
 			fontindex_cn = unicodemap;
-			index_type == FONT_INDEX_TYPE_UTF8;
+			index_type = FONT_INDEX_TYPE_UTF8;
 		}
 		else
 		{
 			fontindex_cn = (unsigned short*)malloc(cn_num*2);
 			
-			if(index_type == FONT_INDEX_TYPE_UTF8)
+			if(index_type & FONT_INDEX_TYPE_UTF8)
 			{
 				for(i=0; i<cn_num; i++)
 				{
@@ -942,7 +1236,7 @@ void* gr_loadFont(const char* fontName)
 					
 				}
 			}
-			else if(index_type == FONT_INDEX_TYPE_GBK)
+			else if((index_type & FONT_INDEX_TYPE_UTF8) == FONT_INDEX_TYPE_GBK)
 			{
 				for(i=0; i<cn_num; i++)
 				{
@@ -954,11 +1248,30 @@ void* gr_loadFont(const char* fontName)
 						fontindex_cn[i] = unicodemap[0];
 				}
 			}			
+		}	
+		
+		if(font->fontver & FONT_VER_UNMONO_EN)
+		{
+			width_offset_en = malloc(en_num);
+			read(fd, width_offset_en, en_num);
+		}
+		else
+		{
+			width_offset_en = NULL;
+		}
+		if(font->fontver & FONT_VER_UNMONO_CN)
+		{
+			width_offset_cn = malloc(cn_num);
+			read(fd, width_offset_cn, cn_num);
+		}
+		else
+		{
+			width_offset_cn = NULL;
 		}
 	}
 	else
 	{
-		index_type == FONT_INDEX_TYPE_UTF8;
+		index_type = FONT_INDEX_TYPE_UTF8;
 		fontindex_en = NULL;
 		fontindex_cn = unicodemap;
 	}	
@@ -982,42 +1295,39 @@ void* gr_loadFont(const char* fontName)
     font->fontdata = fontdata;
     font->fontindex_en = fontindex_en;
     font->fontindex_cn = fontindex_cn;
+    font->width_offset_en = width_offset_en;
+    font->width_offset_cn = width_offset_cn;
 	
     LOGI("font = %s\n", fontName);
-    LOGI("font->en_num      = %d\n", font->en_num);
-    LOGI("font->cn_num      = %d\n", font->cn_num);
-    LOGI("font->index_type  = %s\n", index_type?"UTF-8":"GBK");
-    LOGI("font->ewidth      = %d\n", font->ewidth);
-    LOGI("font->eheight     = %d\n", font->eheight);
-    LOGI("font->cwidth      = %d\n", font->cwidth);
-    LOGI("font->cheight     = %d\n", font->cheight);
+    LOGI("index_type    = %s\n", (index_type & FONT_INDEX_TYPE_UTF8)?"UTF-8":"GBK");
+    LOGI("font->en_num  = %d\n", font->en_num);
+    LOGI("font->cn_num  = %d\n", font->cn_num);   
+    LOGI("font->ewidth  = %d\n", font->ewidth);
+    LOGI("font->eheight = %d\n", font->eheight);
+    LOGI("font->cwidth  = %d\n", font->cwidth);
+    LOGI("font->cheight = %d\n", font->cheight);
       
     return (void*) font;
 }
 
-int gr_getFontDetails(void* font, unsigned* cheight, unsigned* maxwidth)
+int gr_getFontDetails(void* pFont, unsigned* cheight, unsigned* maxwidth)
 {
-    GRFontCN *fnt = (GRFontCN *) font;
-    
-    if (!fnt)   
-		fnt = gr_font_cn2;
+	if(pFont != NULL)
+	{
+		if(*(char*)pFont == FONT_VER_OFFICIAL)
+		{
+			return gr_getFontDetails_en(pFont, cheight, maxwidth);
+		}
+	}
+
+	GRFontCN *font = (GRFontCN *) pFont;
+    if (!font)   
+		font = gr_font_cn2;
 
     if (cheight)    
-		*cheight = fnt->cheight;
+		*cheight = font->cheight;
     if (maxwidth)
-/*    {
-        int pos;
-        *maxwidth = 0;
-        for (pos = 0; pos < 96; pos++)
-        {
-            unsigned int width = fnt->offset[pos+1] - fnt->offset[pos];
-            if (width > *maxwidth)
-            {
-                *maxwidth = width;
-            }
-        }
-    }*/
-		*maxwidth = fnt->cwidth;
+		*maxwidth = font->cwidth;
     
     return 0;
 }
@@ -1211,15 +1521,16 @@ void gr_fb_blank(int blank)
 int gr_get_surface(gr_surface* surface)
 {
     GGLSurface* ms = malloc(sizeof(GGLSurface));
-    if (!ms)    return -1;
+    
+    if (!ms)    
+		return -1;
 
     // Allocate the data
     get_memory_surface(ms);
-
     // Now, copy the data
 //    memcpy(ms->data, gr_mem_surface.data, vi.xres * vi.yres * vi.bits_per_pixel / 8);
-
     *surface = (gr_surface*) ms;
+    
     return 0;
 }
 
@@ -1231,6 +1542,7 @@ int gr_free_surface(gr_surface surface)
     GGLSurface* ms = (GGLSurface*) surface;
     free(ms->data);
     free(ms);
+    
     return 0;
 }
 
