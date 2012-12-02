@@ -1214,13 +1214,13 @@ void* gr_loadFont(const char* fontName)
 			read(fd, fontindex_en, en_num);
 		}
 		
-		if(cn_num == CHAR_CN_NUM)
-		{
-			fontindex_cn = unicodemap;
-			index_type = FONT_INDEX_TYPE_UTF8;
-		}
-		else
-		{
+//		if(cn_num == CHAR_CN_NUM)
+//		{
+//			fontindex_cn = unicodemap;
+//			index_type = FONT_INDEX_TYPE_UTF8;
+//		}
+//		else
+//		{
 			fontindex_cn = (unsigned short*)malloc(cn_num*2);
 			
 			if(index_type & FONT_INDEX_TYPE_UTF8)
@@ -1248,7 +1248,7 @@ void* gr_loadFont(const char* fontName)
 						fontindex_cn[i] = unicodemap[0];
 				}
 			}			
-		}	
+//		}	
 		
 		if(font->fontver & FONT_VER_UNMONO_EN)
 		{
